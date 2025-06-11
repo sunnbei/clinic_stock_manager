@@ -245,8 +245,14 @@ def edit_set(id):
     items = Item.query.all()
     return render_template('edit_set.html', set=set, items=items)
 
-if __name__ == '__main__':
+# データベースの初期化
+def init_db():
     with app.app_context():
         db.create_all()
+
+# アプリケーション起動時にデータベースを初期化
+init_db()
+
+if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port) 
