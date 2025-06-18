@@ -4,6 +4,7 @@ from datetime import datetime
 import csv
 import io
 import os
+import pytz
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key')
@@ -11,6 +12,9 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:/
 if app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):
     app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_URI'].replace('postgres://', 'postgresql://', 1)
 db = SQLAlchemy(app)
+
+# JSTタイムゾーンの設定
+JST = pytz.timezone('Asia/Tokyo')
 
 # 在庫アイテムモデル
 class Item(db.Model):
@@ -55,6 +59,11 @@ def index():
 @app.route('/history')
 def history():
     histories = InventoryHistory.query.order_by(InventoryHistory.created_at.desc()).all()
+    
+    # 各履歴の時刻をJSTに変換
+    for history in histories:
+        history.jst_time = history.created_at.replace(tzinfo=pytz.UTC).astimezone(JST)
+    
     return render_template('history.html', histories=histories)
 
 @app.route('/item/new', methods=['GET', 'POST'])
@@ -182,8 +191,10 @@ def export_history():
     # 履歴データを取得してCSVに書き込み
     histories = InventoryHistory.query.order_by(InventoryHistory.created_at.desc()).all()
     for history in histories:
+        # UTC時刻をJSTに変換
+        jst_time = history.created_at.replace(tzinfo=pytz.UTC).astimezone(JST)
         writer.writerow([
-            history.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            jst_time.strftime('%Y-%m-%d %H:%M:%S'),
             history.item.name,
             '入庫' if history.type == 'in' else '出庫',
             history.quantity_change,
@@ -249,6 +260,7 @@ def edit_set(id):
 def init_db():
     with app.app_context():
         db.create_all()
+        print("データベースの初期化が完了しました。")
 
 # アプリケーション起動時にデータベースを初期化
 init_db()
