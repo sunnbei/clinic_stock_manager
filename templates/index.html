@@ -108,18 +108,56 @@
                         <tr>
                             <td>{{ set.name }}</td>
                             <td>
-                                <form action="{{ url_for('update_set', id=set.id) }}" method="POST" class="d-inline">
-                                    <input type="hidden" name="type" value="in">
-                                    <button type="submit" class="btn btn-sm btn-success">セット入庫</button>
-                                </form>
+                                <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#setInModal{{ set.id }}">
+                                    セット入庫
+                                </button>
                                 <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#setOutModal{{ set.id }}">
                                     セット出庫
                                 </button>
                                 <a href="{{ url_for('edit_set', id=set.id) }}" class="btn btn-sm btn-primary">編集</a>
 
+                                <!-- セット入庫モーダル -->
+                                <div class="modal fade" id="setInModal{{ set.id }}" tabindex="-1">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">{{ set.name }}の入庫確認</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <p>以下のアイテムが入庫されます：</p>
+                                                <ul class="list-group mb-3">
+                                                    {% for set_item in set.items %}
+                                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                        {{ set_item.item.name }}
+                                                        <span class="badge bg-primary rounded-pill">{{ set_item.quantity }} {{ set_item.item.unit }}</span>
+                                                    </li>
+                                                    {% endfor %}
+                                                </ul>
+                                                <div class="alert alert-info">
+                                                    <i class="bi bi-info-circle"></i>
+                                                    現在の在庫状況：
+                                                    <ul class="mb-0 mt-2">
+                                                        {% for set_item in set.items %}
+                                                        <li>{{ set_item.item.name }}: {{ set_item.item.quantity }} {{ set_item.item.unit }}</li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                            <form action="{{ url_for('update_set', id=set.id) }}" method="POST">
+                                                <div class="modal-footer">
+                                                    <input type="hidden" name="type" value="in">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                                                    <button type="submit" class="btn btn-success">入庫実行</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- セット出庫モーダル -->
                                 <div class="modal fade" id="setOutModal{{ set.id }}" tabindex="-1">
-                                    <div class="modal-dialog">
+                                    <div class="modal-dialog modal-lg">
                                         <div class="modal-content">
                                             <div class="modal-header">
                                                 <h5 class="modal-title">{{ set.name }}の出庫</h5>
@@ -127,9 +165,57 @@
                                             </div>
                                             <form action="{{ url_for('update_set', id=set.id) }}" method="POST">
                                                 <div class="modal-body">
+                                                    <!-- セットアイテムセクション -->
+                                                    <div class="mb-4">
+                                                        <h6>セットアイテム</h6>
+                                                        <div class="table-responsive">
+                                                            <table class="table table-sm">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th>アイテム名</th>
+                                                                        <th>数量</th>
+                                                                        <th>単位</th>
+                                                                        <th>現在の在庫</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {% for set_item in set.items %}
+                                                                    <tr>
+                                                                        <td>{{ set_item.item.name }}</td>
+                                                                        <td>
+                                                                            <span class="badge bg-primary">{{ set_item.quantity }}</span>
+                                                                            <input type="hidden" name="set_item_quantities[]" value="{{ set_item.quantity }}">
+                                                                            <input type="hidden" name="set_item_ids[]" value="{{ set_item.item.id }}">
+                                                                        </td>
+                                                                        <td>{{ set_item.item.unit }}</td>
+                                                                        <td>
+                                                                            <span class="badge {% if set_item.item.quantity >= set_item.quantity %}bg-success{% else %}bg-danger{% endif %}">
+                                                                                {{ set_item.item.quantity }}
+                                                                            </span>
+                                                                        </td>
+                                                                    </tr>
+                                                                    {% endfor %}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- 追加アイテムセクション -->
+                                                    <div class="mb-4">
+                                                        <h6>追加アイテム</h6>
+                                                        <div id="additional-items-{{ set.id }}">
+                                                            <!-- 追加アイテムがここに動的に追加されます -->
+                                                        </div>
+                                                        <button type="button" class="btn btn-outline-primary btn-sm" 
+                                                                onclick="addAdditionalItem({{ set.id }})">
+                                                            + アイテムを追加
+                                                        </button>
+                                                    </div>
+
+                                                    <!-- 患者情報セクション -->
                                                     <div class="mb-3">
                                                         <label for="patient_name" class="form-label">患者名</label>
-                                                        <input type="text" class="form-control" name="patient_name">
+                                                        <input type="text" class="form-control" name="patient_name" required>
                                                     </div>
                                                     <div class="mb-3">
                                                         <label for="note" class="form-label">備考</label>
@@ -139,7 +225,7 @@
                                                 </div>
                                                 <div class="modal-footer">
                                                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-                                                    <button type="submit" class="btn btn-danger">出庫</button>
+                                                    <button type="submit" class="btn btn-danger">出庫実行</button>
                                                 </div>
                                             </form>
                                         </div>
@@ -154,5 +240,44 @@
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 追加アイテムのカウンター（セットごと）
+        let additionalItemCounters = {};
+
+        function addAdditionalItem(setId) {
+            if (!additionalItemCounters[setId]) {
+                additionalItemCounters[setId] = 0;
+            }
+            
+            const container = document.getElementById(`additional-items-${setId}`);
+            const itemRow = document.createElement('div');
+            itemRow.className = 'row mb-2 additional-item-row';
+            itemRow.innerHTML = `
+                <div class="col-5">
+                    <select name="additional_item_ids[]" class="form-select form-select-sm" required>
+                        <option value="">アイテムを選択</option>
+                        {% for item in items %}
+                        <option value="{{ item.id }}">{{ item.name }} ({{ item.unit }}) - 在庫: {{ item.quantity }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-3">
+                    <input type="number" name="additional_quantities[]" value="1" min="1" class="form-control form-control-sm" required>
+                </div>
+                <div class="col-3">
+                    <small class="text-muted">追加アイテム</small>
+                </div>
+                <div class="col-1">
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeAdditionalItem(this)">×</button>
+                </div>
+            `;
+            container.appendChild(itemRow);
+            additionalItemCounters[setId]++;
+        }
+
+        function removeAdditionalItem(button) {
+            button.closest('.additional-item-row').remove();
+        }
+    </script>
 </body>
 </html> 

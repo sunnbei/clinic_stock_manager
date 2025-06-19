@@ -148,32 +148,72 @@ def update_set(id):
     set = Set.query.get_or_404(id)
     type = request.form['type']
     
-    for set_item in set.items:
-        item = set_item.item
-        quantity_change = set_item.quantity
-        
-        if type == 'in':
-            item.quantity += quantity_change
-            history = InventoryHistory(
-                item_id=item.id,
-                quantity_change=quantity_change,
-                type=type
-            )
-        else:
-            if item.quantity >= quantity_change:
-                item.quantity -= quantity_change
+    # セットアイテムの処理
+    set_item_ids = request.form.getlist('set_item_ids[]')
+    set_item_quantities = request.form.getlist('set_item_quantities[]')
+    
+    # 追加アイテムの処理
+    additional_item_ids = request.form.getlist('additional_item_ids[]')
+    additional_quantities = request.form.getlist('additional_quantities[]')
+    
+    # セットアイテムの処理
+    for item_id, quantity in zip(set_item_ids, set_item_quantities):
+        if item_id and quantity:
+            item = Item.query.get(int(item_id))
+            quantity_change = int(quantity)
+            
+            if quantity_change > 0:  # 数量が0より大きい場合のみ処理
+                if type == 'in':
+                    item.quantity += quantity_change
+                    history = InventoryHistory(
+                        item_id=item.id,
+                        quantity_change=quantity_change,
+                        type=type
+                    )
+                else:
+                    if item.quantity >= quantity_change:
+                        item.quantity -= quantity_change
+                        history = InventoryHistory(
+                            item_id=item.id,
+                            quantity_change=quantity_change,
+                            type=type,
+                            patient_name=request.form.get('patient_name'),
+                            note=request.form.get('note')
+                        )
+                    else:
+                        flash(f'{item.name}の在庫が不足しています。')
+                        return redirect(url_for('index'))
+                
+                db.session.add(history)
+    
+    # 追加アイテムの処理
+    for item_id, quantity in zip(additional_item_ids, additional_quantities):
+        if item_id and quantity:
+            item = Item.query.get(int(item_id))
+            quantity_change = int(quantity)
+            
+            if type == 'in':
+                item.quantity += quantity_change
                 history = InventoryHistory(
                     item_id=item.id,
                     quantity_change=quantity_change,
-                    type=type,
-                    patient_name=request.form.get('patient_name'),
-                    note=request.form.get('note')
+                    type=type
                 )
             else:
-                flash(f'{item.name}の在庫が不足しています。')
-                return redirect(url_for('index'))
-        
-        db.session.add(history)
+                if item.quantity >= quantity_change:
+                    item.quantity -= quantity_change
+                    history = InventoryHistory(
+                        item_id=item.id,
+                        quantity_change=quantity_change,
+                        type=type,
+                        patient_name=request.form.get('patient_name'),
+                        note=request.form.get('note')
+                    )
+                else:
+                    flash(f'{item.name}の在庫が不足しています。')
+                    return redirect(url_for('index'))
+            
+            db.session.add(history)
     
     db.session.commit()
     flash('セットの在庫が更新されました。')
@@ -212,6 +252,30 @@ def export_history():
         as_attachment=True,
         download_name=f'inventory_history_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
     )
+
+@app.route('/history/<int:id>/cancel', methods=['POST'])
+def cancel_history(id):
+    history = InventoryHistory.query.get_or_404(id)
+    item = history.item
+    
+    # 履歴を取り消す（在庫を元に戻す）
+    if history.type == 'in':
+        # 入庫の取り消し = 出庫
+        if item.quantity >= history.quantity_change:
+            item.quantity -= history.quantity_change
+        else:
+            flash(f'{item.name}の在庫が不足しているため取り消しできません。')
+            return redirect(url_for('history'))
+    else:
+        # 出庫の取り消し = 入庫
+        item.quantity += history.quantity_change
+    
+    # 履歴を削除
+    db.session.delete(history)
+    db.session.commit()
+    
+    flash('履歴が取り消されました。')
+    return redirect(url_for('history'))
 
 @app.route('/item/<int:id>/edit', methods=['GET', 'POST'])
 def edit_item(id):

@@ -25,6 +25,7 @@
                         <th>数量</th>
                         <th>患者名</th>
                         <th>備考</th>
+                        <th>操作</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -42,6 +43,14 @@
                         <td>{{ history.quantity_change }}</td>
                         <td>{{ history.patient_name or '-' }}</td>
                         <td>{{ history.note or '-' }}</td>
+                        <td>
+                            <form action="{{ url_for('cancel_history', id=history.id) }}" method="POST" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-warning" 
+                                        onclick="return confirm('この履歴を取り消しますか？在庫も元に戻されます。')">
+                                    取り消し
+                                </button>
+                            </form>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
