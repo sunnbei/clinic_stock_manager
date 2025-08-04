@@ -54,6 +54,39 @@
                                     出庫
                                 </button>
                                 <a href="{{ url_for('edit_item', id=item.id) }}" class="btn btn-sm btn-primary">編集</a>
+                                <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#deleteItemModal{{ item.id }}">
+                                    削除
+                                </button>
+
+                                <!-- 削除確認モーダル -->
+                                <div class="modal fade" id="deleteItemModal{{ item.id }}" tabindex="-1">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">アイテム削除の確認</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <p><strong>{{ item.name }}</strong>を削除しますか？</p>
+                                                <div class="alert alert-warning">
+                                                    <strong>注意：</strong>
+                                                    <ul class="mb-0">
+                                                        <li>在庫数が0の場合のみ削除可能です</li>
+                                                        <li>削除されていないセットに含まれている場合は削除できません</li>
+                                                        <li>削除後も履歴は保持されます</li>
+                                                    </ul>
+                                                </div>
+                                                <p>現在の在庫: <strong>{{ item.quantity }} {{ item.unit }}</strong></p>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                                                <form action="{{ url_for('delete_item', id=item.id) }}" method="POST" class="d-inline">
+                                                    <button type="submit" class="btn btn-warning">削除</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
 
                                 <!-- 出庫モーダル -->
                                 <div class="modal fade" id="outModal{{ item.id }}" tabindex="-1">
@@ -115,6 +148,54 @@
                                     セット出庫
                                 </button>
                                 <a href="{{ url_for('edit_set', id=set.id) }}" class="btn btn-sm btn-primary">編集</a>
+                                <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#deleteSetModal{{ set.id }}">
+                                    削除
+                                </button>
+
+                                <!-- 削除確認モーダル -->
+                                <div class="modal fade" id="deleteSetModal{{ set.id }}" tabindex="-1">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">セット削除の確認</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <p><strong>{{ set.name }}</strong>を削除しますか？</p>
+                                                <div class="alert alert-warning">
+                                                    <strong>注意：</strong>
+                                                    <ul class="mb-0">
+                                                        <li>セットに含まれるアイテムの在庫が0の場合のみ削除可能です</li>
+                                                        <li>セットに含まれるアイテムが削除されていない他のセットでも使用されている場合は削除できません</li>
+                                                        <li>削除後も履歴は保持されます</li>
+                                                    </ul>
+                                                </div>
+                                                <p>セットに含まれるアイテム数: <strong>{{ set.items|length }}</strong></p>
+                                                {% if set.items %}
+                                                <div class="mt-3">
+                                                    <strong>含まれるアイテム：</strong>
+                                                    <ul class="list-group list-group-flush">
+                                                        {% for set_item in set.items %}
+                                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                            {{ set_item.item.name }}
+                                                            <span class="badge {% if set_item.item.quantity > 0 %}bg-warning{% else %}bg-success{% endif %}">
+                                                                {{ set_item.quantity }} {{ set_item.item.unit }} (在庫: {{ set_item.item.quantity }})
+                                                            </span>
+                                                        </li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                                                <form action="{{ url_for('delete_set', id=set.id) }}" method="POST" class="d-inline">
+                                                    <button type="submit" class="btn btn-warning">削除</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
 
                                 <!-- セット入庫モーダル -->
                                 <div class="modal fade" id="setInModal{{ set.id }}" tabindex="-1">

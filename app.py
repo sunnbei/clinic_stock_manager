@@ -11,6 +11,7 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///inventory.db')
 if app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):
     app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_URI'].replace('postgres://', 'postgresql://', 1)
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 # JSTタイムゾーンの設定
@@ -23,12 +24,14 @@ class Item(db.Model):
     quantity = db.Column(db.Integer, default=0)
     unit = db.Column(db.String(20), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    deleted_at = db.Column(db.DateTime, nullable=True)
 
 # セットモデル
 class Set(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    deleted_at = db.Column(db.DateTime, nullable=True)
     items = db.relationship('SetItem', backref='set', lazy=True)
 
 # セットアイテムモデル（セットとアイテムの中間テーブル）
@@ -52,8 +55,8 @@ class InventoryHistory(db.Model):
 
 @app.route('/')
 def index():
-    items = Item.query.all()
-    sets = Set.query.all()
+    items = Item.query.filter(Item.deleted_at.is_(None)).all()
+    sets = Set.query.filter(Set.deleted_at.is_(None)).all()
     return render_template('index.html', items=items, sets=sets)
 
 @app.route('/history')
@@ -73,7 +76,7 @@ def new_item():
         quantity = int(request.form['quantity'])
         unit = request.form['unit']
         
-        item = Item(name=name, quantity=quantity, unit=unit)
+        item = Item(name=name, quantity=quantity, unit=unit, deleted_at=None)
         db.session.add(item)
         db.session.commit()
         
@@ -119,7 +122,7 @@ def update_item(id):
 def new_set():
     if request.method == 'POST':
         name = request.form['name']
-        set = Set(name=name)
+        set = Set(name=name, deleted_at=None)
         db.session.add(set)
         db.session.commit()
         
@@ -140,7 +143,7 @@ def new_set():
         flash('新しいセットが作成されました。')
         return redirect(url_for('index'))
     
-    items = Item.query.all()
+    items = Item.query.filter(Item.deleted_at.is_(None)).all()
     return render_template('new_set.html', items=items)
 
 @app.route('/set/<int:id>/update', methods=['POST'])
@@ -290,6 +293,34 @@ def edit_item(id):
     
     return render_template('edit_item.html', item=item)
 
+@app.route('/item/<int:id>/delete', methods=['POST'])
+def delete_item(id):
+    item = Item.query.get_or_404(id)
+    
+    # 削除前の制約チェック
+    errors = []
+    
+    # 在庫数が0でない場合は削除不可
+    if item.quantity > 0:
+        errors.append(f'{item.name}の在庫が{item.quantity}{item.unit}残っているため削除できません。')
+    
+    # 削除されていないセットに含まれている場合は削除不可
+    set_items = SetItem.query.filter_by(item_id=item.id).join(Set).filter(Set.deleted_at.is_(None)).first()
+    if set_items:
+        errors.append(f'{item.name}は削除されていないセットに含まれているため削除できません。')
+    
+    if errors:
+        for error in errors:
+            flash(error)
+        return redirect(url_for('index'))
+    
+    # 論理削除実行
+    item.deleted_at = datetime.utcnow()
+    db.session.commit()
+    
+    flash(f'{item.name}が削除されました。')
+    return redirect(url_for('index'))
+
 @app.route('/set/<int:id>/edit', methods=['GET', 'POST'])
 def edit_set(id):
     set = Set.query.get_or_404(id)
@@ -317,8 +348,48 @@ def edit_set(id):
         flash('セットが更新されました。')
         return redirect(url_for('index'))
     
-    items = Item.query.all()
+    items = Item.query.filter(Item.deleted_at.is_(None)).all()
     return render_template('edit_set.html', set=set, items=items)
+
+@app.route('/set/<int:id>/delete', methods=['POST'])
+def delete_set(id):
+    set = Set.query.get_or_404(id)
+    
+    # 削除前の制約チェック
+    errors = []
+    
+    # セットに含まれるアイテムの在庫チェック
+    for set_item in set.items:
+        if set_item.item.quantity > 0:
+            errors.append(f'セットに含まれる「{set_item.item.name}」の在庫が{set_item.item.quantity}{set_item.item.unit}残っているため削除できません。')
+            break
+    
+    # セットに含まれるアイテムが他のセットでも使用されているかチェック
+    for set_item in set.items:
+        # 削除されていない他のセットで同じアイテムが使用されているかチェック
+        other_set_items = SetItem.query.filter(
+            SetItem.item_id == set_item.item_id,
+            SetItem.set_id != set.id
+        ).join(Set).filter(Set.deleted_at.is_(None)).first()
+        
+        if other_set_items:
+            errors.append(f'セットに含まれる「{set_item.item.name}」は削除されていない他のセットでも使用されているため削除できません。')
+            break
+    
+    if errors:
+        for error in errors:
+            flash(error)
+        return redirect(url_for('index'))
+    
+    # セット名を保存（削除後のメッセージ用）
+    set_name = set.name
+    
+    # 論理削除実行
+    set.deleted_at = datetime.utcnow()
+    db.session.commit()
+    
+    flash(f'セット「{set_name}」が削除されました。')
+    return redirect(url_for('index'))
 
 # データベースの初期化
 def init_db():
